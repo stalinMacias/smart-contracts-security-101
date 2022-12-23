@@ -81,7 +81,7 @@ describe("DoS", function () {
 
       });
 
-      it("DoS attacked caused by an unexpected reverted <-> Should revert if any refunded bidder is a contract that can't received the refunded ETH", async function () {
+      it.skip("DoS Attack caused by an unexpected reverted <-> Should revert if any refunded bidder is a contract that can't received the refunded ETH", async function () {
         // Validate auction contract set in the attacker contract is the same address as the one deployed from this test file!
         expect(await this.attackerContract.auctionContract()).to.eq(this.auction.address)
 
@@ -100,7 +100,15 @@ describe("DoS", function () {
 
       });
 
-      it("Should revert if the amount of computation hits the block gas limit", async function () {
+      it("DoS Attack caused by hitting the block gas limit - Should revert if the amount of computation hits the block gas limit", async function () {
+        // The block gas limit was updated to 20m for this test!
+
+        // Submit a bunch of bids() to make the refunds[] grow so much that the refundAll() function will hit the block gas limit when refunding all the submitted bids
+        for(let i = 0; i < 2000; i++) {
+          await this.auction.connect(attacker).bid({ value: 150 + i });
+        }
+
+        await this.auction.refundAll();
 
       });
     });
