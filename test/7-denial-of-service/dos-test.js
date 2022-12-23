@@ -10,6 +10,10 @@ describe("DoS", function () {
     const Auction = await ethers.getContractFactory("Auction", deployer);
     this.auction = await Auction.deploy();
 
+    // Deploy the Attacker Contract that can't receive ETH
+    const AttackerContract = await ethers.getContractFactory("AttackerContract", deployer);
+    this.attackerContract = await AttackerContract.deploy(this.auction.address);
+
     this.auction.bid({ value: 100 });
   });
 
@@ -45,8 +49,8 @@ describe("DoS", function () {
       });
     });
 
-    describe.skip("When calling refundAll()", function () {
-      it("Should refund the bidders that didn't win and keep the ETH that the highest bidder depositted", async function () {
+    describe("When calling refundAll()", function () {
+      it.skip("Should refund the bidders that didn't win and keep the ETH that the highest bidder depositted", async function () {
         // A couple users place their bids
         //parseEther converts to ETH Notation -> 18 decimals
         const userBid = ethers.utils.parseEther("1");
@@ -77,7 +81,22 @@ describe("DoS", function () {
 
       });
 
-      it("Should revert if any refunded bidder is a contract that can't received the refunded ETH", async function () {
+      it("DoS attacked caused by an unexpected reverted <-> Should revert if any refunded bidder is a contract that can't received the refunded ETH", async function () {
+        // Validate auction contract set in the attacker contract is the same address as the one deployed from this test file!
+        expect(await this.attackerContract.auctionContract()).to.eq(this.auction.address)
+
+        // Send a bid from the attacker contract!
+        await this.attackerContract.bid({ value: ethers.utils.parseEther("1") })
+
+        // Send a higher bid from a normal account to move the attacker contract address into the refunds[] array
+        await this.auction.connect(user).bid({ value: ethers.utils.parseEther("2") })
+
+        // Execute the refundAll() function - Should fail
+        await expect(this.auction.refundAll()).to.be.revertedWith("'Address: unable to send value, recipient may have reverted'");
+
+        // Validate the attacker contract address is on the refunds[] at the position 1
+        const [addr, amount] = await this.auction.refunds(1);
+        expect(addr).to.eq(this.attackerContract.address);
 
       });
 
