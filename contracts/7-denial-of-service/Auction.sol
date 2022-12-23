@@ -5,6 +5,8 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
+// Beware the logic of this contract may be succeptible to DoS Attacks
+
 contract Auction is Ownable, ReentrancyGuard {
   using Address for address payable;
 
