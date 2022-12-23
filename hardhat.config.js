@@ -21,4 +21,16 @@ module.exports = {
       },
     ],
   },
+  networks: {
+    hardhat: {
+      blockGasLimit: 20000000,
+    },
+  },
+  gasReporter: {
+    enabled: true,
+    currency: "USD",
+  },
+  mocha: {
+    timeout: 2000000000,
+  },
 };
