@@ -7,6 +7,24 @@ describe("Upgradable Proxy Pattern", function () {
   beforeEach(async function () {
     [deployer, user] = await ethers.getSigners();
 
+    /**
+     * @dev - Notes about getContractFactory() and getContractAt() hardhat methods
+     * 
+     * @function - getContractFactory("ArtifactName", <signer>)
+     * @param ArtifactName -> The ArtifactName is used by hardhat to get the contract's ABI, thus the available contract's functions
+     * @param signer -> signer is the entire object, not only the address!
+     * @syntax   - function getContractFactory(name: string, signer?: ethers.Signer): Promise<ethers.ContractFactory>;
+     * @purpose -> Apparently, the purpose of getContractFactory is to prepare a contract instance ready to be deployed and signed by the signer!
+     * @warning -> If the provided ArtifactName doesn't match any artifact from the current project, an error similar to like the below will appear:
+     * @error -> Please replace "WrongArtifactName" for the correct contract name wherever you are trying to read its artifact.
+     * 
+     * @function - getContractAt("ArtifactName", <address>)
+     * @param ArtifactName -> The ArtifactName is used by hardhat to get the contract's ABI, thus the available contract's functions
+     * @param address -> address indicates the contract's address from which the storage will be manipulated
+     * @syntax   - function getContractAt(name: string, address: string, signer?: ethers.Signer): Promise<ethers.Contract>;
+     * @purpose -> Gets a contract instance of an alrady deployed contract
+     */
+
     const FullLogicV1ArtifactName = "contracts/8-upgradeability/storage-collition/LogicV1.sol:LogicV1"
     const FullProxyArtifactName = "contracts/8-upgradeability/storage-collition/Proxy.sol:Proxy"
     const FullLogicV2ArtifactName = "contracts/8-upgradeability/storage-collition/LogicV2.sol:LogicV2"
