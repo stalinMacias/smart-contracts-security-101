@@ -24,10 +24,12 @@ module.exports = {
   networks: {
     hardhat: {
       blockGasLimit: 20000000,
+      /*
       mining: {
         auto: false,
         interval: 5000,
       },
+      */
     },
   },
   gasReporter: {

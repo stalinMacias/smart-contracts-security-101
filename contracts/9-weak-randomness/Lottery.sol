@@ -9,21 +9,24 @@ contract Lottery is Ownable {
     using Address for address payable;
 
     uint8 public winningNumber;
+
+    // Keep track of the number that each player bets for
     mapping(address => uint8) public bets;
+    // Prevent that the same number can be used by different players
+    mapping(uint => bool) public takenNumbers;
+
     bool public betsClosed;
     bool public prizeTaken;
 
-
-    // mapping(uint => bool) taken;	<---> An user chooses a number to place a bet, whenever a number is picked up and used to place a bet, that number can't be picked up by another user 
-
-
     function placeBet(uint8 _number) external payable {
         require(bets[msg.sender] == 0, "Only one bet per player");
+        require(takenNumbers[_number] == false, "The selected number has been already taken by another player, choose a different number");
         require(msg.value == 1 ether, "Bet cost: 1 ether");
         require(betsClosed == false, "Bets are closed");
         require(_number > 0 && _number <= 255, "Must be a number from 1 to 255");
 
         bets[msg.sender] = _number;
+        takenNumbers[_number] = true;
     }
 
     function endLottery() external onlyOwner {

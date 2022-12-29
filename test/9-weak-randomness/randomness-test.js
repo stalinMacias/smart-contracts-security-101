@@ -78,7 +78,14 @@ describe("Weak Randomness", function () {
     });
   });
 
-  describe("Attacking the Lottery Contract - Replicated Logic Attack", function () {
+  describe("With bets open - Updated Lottery contract to allow that each number can be taken only once", function () {
+    it("Should revert if a number is tried to be picked up more than one time", async function () {
+      await this.lottery.placeBet(5, { value: this.lotteryFee });
+      await expect(this.lottery.connect(user).placeBet(5, { value: this.lotteryFee })).to.be.revertedWith("The selected number has been already taken by another player, choose a different number");
+    });
+  });
+
+  describe.skip("Attacking the Lottery Contract - Replicated Logic Attack", function () {
     it("Place a bet on the same block where the endLottery() will be mined", async function () {
       // Placing some bets - Just to increase the reward to be claimed
       await this.lottery.connect(user).placeBet(3, { value: this.lotteryFee })
