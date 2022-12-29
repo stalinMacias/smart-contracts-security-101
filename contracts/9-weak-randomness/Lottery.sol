@@ -13,6 +13,10 @@ contract Lottery is Ownable {
     bool public betsClosed;
     bool public prizeTaken;
 
+
+    // mapping(uint => bool) taken;	<---> An user chooses a number to place a bet, whenever a number is picked up and used to place a bet, that number can't be picked up by another user 
+
+
     function placeBet(uint8 _number) external payable {
         require(bets[msg.sender] == 0, "Only one bet per player");
         require(msg.value == 1 ether, "Bet cost: 1 ether");
@@ -27,7 +31,7 @@ contract Lottery is Ownable {
         winningNumber = pseudoRandNumGen();
     }
 
-    function withdrawPrize() external{
+    function withdrawPrize() external {
         require(betsClosed == true, "Bets are still running");
         require(prizeTaken == false, "Prize already taken");
         require(bets[msg.sender] == winningNumber, "You aren't the winner");
