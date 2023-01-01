@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8;
 
-contract VerifySignature_StringAsMessage {
+contract VerifySignature {
     function getMessageHash(
         string memory _message
     ) public pure returns (bytes32) {
