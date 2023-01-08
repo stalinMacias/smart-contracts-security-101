@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.0;
 
-/* 
-Vulnerabilities:
-- tx.origin 
-- lack of access controls (setDexAddress)
-- overflow (old pragma)
-*/
 contract ETBToken {
   address public owner;
   address public etbDex;
@@ -30,20 +24,20 @@ contract ETBToken {
   }
 
   modifier onlyOwner() {
-    require(tx.origin == owner, "Restricted Acces");
+    require(tx.origin == owner, "Restricted Acces"); // @audit-issue - Usage of tx.origin
     _;
   }
 
-  function setDexAddress(address _dex) external {
+  function setDexAddress(address _dex) external { // @audit-issue - Lack of Access Control, anyone can update the dex address
     etbDex = _dex;
   }
 
   function transfer(address recipient, uint256 amount) external {
     require(recipient != address(0), "ERC20: transfer from the zero address");
-    require(balances[msg.sender] - amount >= 0, "Not enough balance");
+    require(balances[msg.sender] - amount >= 0, "Not enough balance");  // @audit-issue - Underflow issue, using a solidity version lower than 0.8, math under/over flows are not handled by solidity
 
-    balances[msg.sender] -= amount;
-    balances[recipient] += amount;
+    balances[msg.sender] -= amount;   // @audit-issue - Underflow issue
+    balances[recipient] += amount;  // @audit-issue - Underflow issue
   }
 
   function approve(address spender, uint256 amount) external {
@@ -57,25 +51,25 @@ contract ETBToken {
     address recipient,
     uint256 amount
   ) external returns (bool) {
-    require(allowances[sender][msg.sender] - amount >= 0, "ERC20: amount exceeds allowance");
-    require(balances[sender] - amount >= 0, "Not enough balance");
+    require(allowances[sender][msg.sender] - amount >= 0, "ERC20: amount exceeds allowance"); // @audit-issue - Underflow issue
+    require(balances[sender] - amount >= 0, "Not enough balance");  // @audit-issue - Underflow issue
 
-    allowances[sender][msg.sender] -= amount;
+    allowances[sender][msg.sender] -= amount; // @audit-issue - Underflow issue
 
-    balances[sender] -= amount;
-    balances[recipient] += amount;
+    balances[sender] -= amount; // @audit-issue - Underflow issue
+    balances[recipient] += amount;  // @audit-issue - Overflow issue
 
     return true;
   }
 
   function mint(uint256 amount) external onlyEtbDex {
-    totalSupply += amount;
-    balances[owner] += amount;
+    totalSupply += amount;  // @audit-issue - Overflow issue
+    balances[owner] += amount;  // @audit-issue - Overflow issue
   }
 
   function burn(address account, uint256 amount) external onlyEtbDex {
-    totalSupply -= amount;
-    balances[account] -= amount;
+    totalSupply -= amount;  // @audit-issue - Underflow issue
+    balances[account] -= amount;  // @audit-issue - Underflow issue
   }
 
   /* --- Getters --- */
