@@ -15,6 +15,9 @@ contract EtbDex {
     owner = msg.sender;
   }
 
+  // @audit-info Added this function to run tests - Delete it after testing is complete!
+  receive() external payable {}
+
   modifier onlyOwner(bytes32 _password) {
     require(password == _password, "You are not the owner!"); // @audit-issue - Incorrect mechanism of validation, to validate ownership is a best practice to use addresses
     _;
@@ -23,7 +26,7 @@ contract EtbDex {
   function buyTokens() external payable {
     require(msg.value > 0, "Should send ETH to buy tokens");
     require(_etbToken.balanceOf(owner) - msg.value >= 0, "Not enough tokens to sell");  // @audit-issue - Underflow issue
-    _etbToken.transferFrom(owner, msg.sender, msg.value - calculateFee(msg.value)); // @audit-issue - No need to use transferFrom(), funds are going out from the owner's balance, should use transfer()
+    _etbToken.transferFrom(owner, msg.sender, msg.value - calculateFee(msg.value)); // @audit-issue - Underflow issue
   }
 
   // @audit-issue - This function is succeptible to reentrancy, implement check-effects-interaction pattern

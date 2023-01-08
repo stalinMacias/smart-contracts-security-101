@@ -30,7 +30,7 @@ describe("Final Project", function () {
       it("owner should be able to update the dexAddress", async function () {
         await this.etbToken.setDexAddress(this.etbDex.address);
         const dexAddress = await this.etbToken.etbDex();
-        expect(dexAddress == this.etbDex.address)
+        expect(dexAddress).to.eq(this.etbDex.address)
       });
       it("only the owner should be able to update the dexAddress", async function () {
         // @note - Update this test after fixing the vulnerabilities in the contracts
@@ -61,7 +61,7 @@ describe("Final Project", function () {
       it("transfer if sender has enough funds", async function () {
         await this.etbToken.transfer(user2.address, amountToSend);
         const user2Balance = await this.etbToken.balanceOf(user2.address);
-        expect(user2Balance == amountToSend)
+        expect(user2Balance).to.eq(amountToSend)
       });
     });
 
@@ -71,9 +71,9 @@ describe("Final Project", function () {
         await expect(this.etbToken.connect(user).approve(ethers.constants.AddressZero, approvedAmount)).to.be.revertedWith("ERC20: approve to the zero address");
       });
       it("User approves User2 to spend 10 tokens", async function () {
-        await expect(this.etbToken.connect(user).approve(user2.address, approvedAmount));
+        await this.etbToken.connect(user).approve(user2.address, approvedAmount);
         const user2Allowance = await this.etbToken.allowanceOf(user.address,user2.address);
-        expect(user2Allowance == approvedAmount);
+        expect(user2Allowance).to.eq(approvedAmount);
       });
     });
 
@@ -125,9 +125,9 @@ describe("Final Project", function () {
         const userBalanceAfter = await this.etbToken.balanceOf(user.address);
         const user2AllowanceAfter = await this.etbToken.allowanceOf(user.address,user2.address);
 
-        expect(user3BalanceAfter == (user3BalanceBefore).add(amountToSend));
-        expect(userBalanceAfter == (userBalanceBefore).sub(amountToSend));
-        expect(user2AllowanceAfter == (user2AllowanceBefore).sub(amountToSend));
+        expect(user3BalanceAfter).to.eq((user3BalanceBefore).add(amountToSend));
+        expect(userBalanceAfter).to.eq((userBalanceBefore).sub(amountToSend));
+        expect(user2AllowanceAfter).to.eq((user2AllowanceBefore).sub(amountToSend));
       });
 
     });
@@ -137,10 +137,33 @@ describe("Final Project", function () {
         await expect(this.etbToken.connect(attacker).mint(ethers.utils.parseEther("1"))).to.be.revertedWith("Restricted Access");
       });
       it("happy path - only the dex contract can mint new tokens, if the mint() is called by any other address, the transaction should be reverted", async function () {
+        // Source about how to `Call A Smart Contract Function With Another Deployed Smart Contract Address As "msg.sender " From Hardhat Test`
+        // https://ethereum.stackexchange.com/questions/122959/call-a-smart-contract-function-with-another-deployed-smart-contract-address-as/142534#142534
+        gasPrice = await ethers.provider.getGasPrice()
+        await deployer.sendTransaction({
+          to: this.etbDex.address, 
+          value: ethers.utils.parseEther("1"),
+          gasLimit: parseInt("65000"),
+          gasPrice: gasPrice,
+        })
+
+        await hre.network.provider.request({
+          method: "hardhat_impersonateAccount",
+          params: [this.etbDex.address],
+        });
+
+        const etbDexContractSigner = await ethers.getSigner(this.etbDex.address);
+
         const totalSupplyBefore = await this.etbToken.totalSupply();
-        await expect(this.etbToken.connect(this.etbDex.address).mint(ethers.utils.parseEther("1")));
+        await this.etbToken.connect(etbDexContractSigner).mint(ethers.utils.parseEther("1"));
         const totalSupplyAfter = await this.etbToken.totalSupply();
-        expect(totalSupplyAfter == (totalSupplyBefore).add(ethers.utils.parseEther("1")));
+        expect(totalSupplyAfter).to.eq((totalSupplyBefore).add(ethers.utils.parseEther("1")))
+
+        await hre.network.provider.request({
+          method: "hardhat_stopImpersonatingAccount",
+          params: [this.etbDex.address],
+        });
+
       });
 
     });
@@ -150,20 +173,39 @@ describe("Final Project", function () {
         await expect(this.etbToken.connect(attacker).burn(deployer.address,ethers.utils.parseEther("1"))).to.be.revertedWith("Restricted Access");
       });
       it("happy path - only the dex contract can burn tokens, if the burn() is called by any other address, the transaction should be reverted", async function () {
-        const totalSupplyBefore = await this.etbToken.totalSupply();
-        await expect(this.etbToken.connect(this.etbDex.address).burn(deployer.address,ethers.utils.parseEther("1")));
-        const totalSupplyAfter = await this.etbToken.totalSupply();
-        expect(totalSupplyAfter == (totalSupplyBefore).sub(ethers.utils.parseEther("1")));
-      });
+        // Source about how to `Call A Smart Contract Function With Another Deployed Smart Contract Address As "msg.sender " From Hardhat Test`
+        // https://ethereum.stackexchange.com/questions/122959/call-a-smart-contract-function-with-another-deployed-smart-contract-address-as/142534#142534
+        gasPrice = await ethers.provider.getGasPrice()
+        await deployer.sendTransaction({
+          to: this.etbDex.address, 
+          value: ethers.utils.parseEther("1"),
+          gasLimit: parseInt("65000"),
+          gasPrice: gasPrice,
+        })
 
+        await hre.network.provider.request({
+          method: "hardhat_impersonateAccount",
+          params: [this.etbDex.address],
+        });
+
+        const etbDexContractSigner = await ethers.getSigner(this.etbDex.address);
+
+        const totalSupplyBefore = await this.etbToken.totalSupply();
+        await this.etbToken.connect(etbDexContractSigner).burn(deployer.address,ethers.utils.parseEther("1"));
+        const totalSupplyAfter = await this.etbToken.totalSupply();
+        expect(totalSupplyAfter).to.eq((totalSupplyBefore).sub(ethers.utils.parseEther("1")))
+
+        await hre.network.provider.request({
+          method: "hardhat_stopImpersonatingAccount",
+          params: [this.etbDex.address],
+        });
+
+      });
     });
 
-    
   });
 
 
-  describe("EtbDex", function () {
-    it("...");
-  });
+
 
 });
