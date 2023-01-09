@@ -34,12 +34,15 @@ contract EtbDex {
     require(_etbToken.balanceOf(msg.sender) - _amount >= 0, "Not enough tokens"); // @audit-issue - Underflow issue
 
     payable(msg.sender).send(_amount);  // @audit-issue - send() is deprecated, should use the call{value:_amount}("") approach to send ETHs
+    //(bool success, ) = payable(msg.sender).call.value(_amount)("");
+    //require(success, "Error when sending the ETH on the sellTokens function - DEX Contract");
 
     _etbToken.burn(msg.sender, _amount);
     _etbToken.mint(_amount);
   }
 
   function setFee(uint256 _fee, bytes32 _password) external onlyOwner(_password) {  // @audit-issue - Improper mechanism to implement the Access Control, validation is made based on information that anyone can access
+    fee = _fee;
   }
 
   function calculateFee(uint256 _amount) internal view returns (uint256) {

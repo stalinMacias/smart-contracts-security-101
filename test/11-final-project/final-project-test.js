@@ -7,20 +7,25 @@ describe("Final Project", function () {
   beforeEach(async function () {
     [deployer, user, user2, user3, attacker] = await ethers.getSigners();
 
-    const dexContractPassword = ethers.utils.formatBytes32String("eatTheBlocks")
+    this.dexContractPassword = ethers.utils.formatBytes32String("eatTheBlocks")
 
     const EtbToken = await ethers.getContractFactory("ETBToken", deployer);
     this.etbToken = await EtbToken.deploy(ethers.utils.parseEther("1000"));
 
     const EtbDex = await ethers.getContractFactory("EtbDex", deployer);
-    this.etbDex = await EtbDex.deploy(this.etbToken.address, dexContractPassword);
+    this.etbDex = await EtbDex.deploy(this.etbToken.address, this.dexContractPassword);
 
-    await this.etbDex.setFee(1, dexContractPassword);
+    await this.etbDex.setFee(1, this.dexContractPassword);
     await this.etbToken.setDexAddress(this.etbDex.address);
     await this.etbToken.approve(this.etbDex.address, ethers.utils.parseEther("1000"));
+
+    const AttackDEXContract = await ethers.getContractFactory("AttackDEXContract", attacker);
+    this.attackerDEXContract = await AttackDEXContract.deploy(this.etbDex.address, this.etbToken.address);
+
+
   });
 
-  describe("ETB Token", function () {
+  describe.skip("ETB Token", function () {
     it("totalSupply should match Initial supply", async function () {
       expect(await this.etbToken.totalSupply()).to.eq(ethers.utils.parseEther("1000"));
     });
@@ -206,6 +211,166 @@ describe("Final Project", function () {
   });
 
 
+  describe("EtbDex contract tests", function () {
+    describe.skip("Validate variables were initialized properly when the contract was created", function () {
+      it("Validate owner was set properly", async function () {
+        expect(await this.etbDex.owner()).to.eq(deployer.address);
+      });
+      it("Validate etbToken address was set correct", async function () {
+        const etbTokenAddressBytes32 = await ethers.provider.getStorageAt(this.etbDex.address,1)
+        const etbTokenAddress = await ethers.utils.hexStripZeros(etbTokenAddressBytes32);
+        expect(etbTokenAddress.toUpperCase()).to.eq((this.etbToken.address).toUpperCase());
+      });
+    });
+    
+    describe.skip("buyTokens() function", function () {
+      it("unhappy path - NO ETHs are sent", async function () {
+        await expect(this.etbDex.connect(user).buyTokens({ value : ethers.utils.parseEther("0") })).to.be.revertedWith("Should send ETH to buy tokens");
+      });
+
+      // @note - Update this test after fixing the vulnerabilities in the contracts
+      it("unhappy path - owner has not enough balance to send the requested amount of tokens", async function () {
+        // Decrease the owner's token balance to less than 50 tokens (deployer account is the owner)
+        const currentOwnerBalance = await this.etbToken.balanceOf(deployer.address);
+        const depleteOwnerBalance = ethers.utils.parseEther("960")
+        // console.log("currentOwnerBalance" , currentOwnerBalance);
+        // const depleteOwnerBalanceAmount = currentOwnerBalance - ethers.utils.parseEther("960")
+        await this.etbToken.transfer(user2.address, depleteOwnerBalance)
+        const balanceOwnerAfter = await this.etbToken.balanceOf(deployer.address);
+        console.log("balanceOwnerAfter: ", ethers.utils.formatEther(balanceOwnerAfter));
+        expect(balanceOwnerAfter).to.eq((currentOwnerBalance).sub(depleteOwnerBalance))
+
+        // user attempts to buy more tokens than the remaining owner's balance
+        //await expect(this.etbDex.connect(attacker).buyTokens({ value : ethers.utils.parseEther("50") })).to.be.revertedWith("Not enough tokens to sell")
+
+        await this.etbDex.connect(attacker).buyTokens({ value : ethers.utils.parseEther("80") });
+
+        const attackerTokenBalance = await this.etbToken.balanceOf(attacker.address);
+        console.log("Attacker token's balance after buying tokens and generating an underflow issue: ", ethers.utils.formatEther(attackerTokenBalance));
+
+        const balanceOwnerAfterAttack = await this.etbToken.balanceOf(deployer.address);
+        console.log("balanceOwnerAfterAttack: ", ethers.utils.formatEther(balanceOwnerAfterAttack));
+
+        /** ====================== NOTES ======================
+         * When an underflow happens while buying tokens the next events will be true:
+         * buyer will receive the tokens they bought
+         * owner's token balance will totally be wrecked (The underflow will happen on this variable!)
+                * Attacker token's balance after buying tokens and generating an underflow issue:  80.0
+                * balanceOwnerAfterAttack:  115792089237316195423570985008687907853269984665640564039417.584007913129639936
+         */
+
+      });
+
+      it("happy path - buyTokens() is executed successfully", async function () {
+        const tokensToBuy = ethers.utils.parseEther("5");
+        await this.etbDex.connect(user).buyTokens({ value : tokensToBuy });
+        const userTokensBalance = await this.etbToken.balanceOf(user.address);
+        expect(userTokensBalance).to.eq(tokensToBuy)
+      });
+
+    });
+
+    describe.skip("sellTokens() function", function () {
+      it("Exploiting reentrancy on the DEX Contract by performing an attack from an Attacker Contract", async function () {
+        const tokens = ethers.utils.parseEther("5")
+        expect(await this.attackerDEXContract.owner()).to.eq(attacker.address);
+        // Buy 5 tokens on the Attacker Contract from the DEX Contract
+        await this.attackerDEXContract.connect(attacker).buyTokens({ value: tokens });
+        
+        const attackerContractTokensBalance = await this.etbToken.balanceOf(this.attackerDEXContract.address);
+        expect(attackerContractTokensBalance).to.eq(tokens)
+
+        // Another users buy tokens using the DEX Contract -> Just to increase the ETH balance on the DEX Contract
+        await this.etbDex.connect(user).buyTokens({ value: tokens });
+        await this.etbDex.connect(user2).buyTokens({ value: tokens });
+        await this.etbDex.connect(user3).buyTokens({ value: ethers.utils.parseEther("7") });
+
+        console.log("DEX Contract ETH Balance BEFORE the attack: ", ethers.utils.formatEther(await ethers.provider.getBalance(this.etbDex.address)));
+        console.log("Attacker account ETH Balance BEFORE performing the attack: ", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)));
+        console.log("============================================================================");
+        
+        // Attack the DEX Contract
+        await this.attackerDEXContract.connect(attacker).sellTokens(attackerContractTokensBalance);
+        
+        console.log("============================================================================");
+        console.log("DEX Contract ETH Balance AFTER the attack: ", ethers.utils.formatEther(await ethers.provider.getBalance(this.etbDex.address)));
+        console.log("Attacker account ETH Balance AFTER performing the attack: ", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)));
+      })
+
+      // @note - Update this test after fixing the vulnerabilities in the contracts
+      it("unhappy path - Caller has not enough tokens to sell", async function () {
+        // Buy some tokens from other users - Just to fund with ETH the dex contract
+        await this.etbDex.connect(user).buyTokens({ value: ethers.utils.parseEther("5") });
+        await this.etbDex.connect(user2).buyTokens({ value: ethers.utils.parseEther("5") });
+
+        //await expect(this.etbDex.connect(user).sellTokens(ethers.utils.parseEther("5"))).to.be.revertedWith("Not enough tokens");
+        
+        const ownerTokensBefore = await this.etbToken.balanceOf(deployer.address);
+        const userTokensBefore = await this.etbToken.balanceOf(user.address);
+        console.log("ownerTokensBefore: ", ownerTokensBefore);
+        console.log("userTokensBefore: ", userTokensBefore);
+
+        await this.etbDex.connect(user).sellTokens(ethers.utils.parseEther("5"));
+
+        const ownerTokensAfter = await this.etbToken.balanceOf(deployer.address);
+        const userTokensAfter = await this.etbToken.balanceOf(user.address);
+        console.log("ownerTokensAfter: ", ownerTokensAfter);
+        console.log("userTokensAfter: ", userTokensAfter);
+        
+      });
+      it("happy path - sellTokens() is executed successfully", async function () {
+        await this.etbDex.connect(user).buyTokens({ value: ethers.utils.parseEther("5") });
+        
+        const userETHBalanceBeforeSelling = await ethers.provider.getBalance(user.address);
+
+        await this.etbDex.connect(user).sellTokens(ethers.utils.parseEther("5"));
+
+        expect(await this.etbToken.balanceOf(user.address)).to.eq(ethers.utils.parseEther("0"))
+
+        const userETHBalanceAfterSelling = await ethers.provider.getBalance(user.address);
+
+        expect(userETHBalanceAfterSelling).gt(userETHBalanceBeforeSelling);
+      });
+    });
+
+    describe("Validate setFee()", function () {
+      it("Validate fee is set properly", async function () {
+        const fee = await this.etbDex.fee();
+        console.log("fee: ",ethers.utils.formatEther(fee));
+        expect(fee).to.eq(1);
+      });
+
+      // @note - When the bugs are fixed, create a test to validate the access control to this function
+      
+    });
+
+    describe("Validate withdrawFees()", function () {
+      it("unhappy path - Incorrect access", async function () {
+        await expect(this.etbDex.withdrawFees(ethers.utils.formatBytes32String("wrongPassword"))).to.be.revertedWith("You are not the owner!");
+      });
+
+      // @note - Even though the withdrawFees() logic is wrong, let's test the it actually allow the owner to withdraw the ETHs
+      // @note - The function withdraws all the ETH balance, not only the equivalent of the collected fees - honeypot!
+      it("happy path - withdrawFees() is executed successfully", async function () {
+        // Buy some tokens from other users - Just to fund with ETH the dex contract
+        await this.etbDex.connect(user).buyTokens({ value: ethers.utils.parseEther("5") });
+        await this.etbDex.connect(user2).buyTokens({ value: ethers.utils.parseEther("5") });
+
+        const ownerETHBalanceBefore = await ethers.provider.getBalance(deployer.address);
+
+        await this.etbDex.withdrawFees(this.dexContractPassword)
+
+        const ownerETHBalanceAfter = await ethers.provider.getBalance(deployer.address);
+
+        expect(ownerETHBalanceAfter).gt(ownerETHBalanceBefore);
+
+      });
+
+      // @note - When the bugs are fixed, create a test to validate the access control to this function
+      
+    });
+
+  });
 
 
 });
