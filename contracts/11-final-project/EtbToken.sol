@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.0;
 
-contract ETBToken {
-  address public owner;
+import "@openzeppelin/contracts-legacy/access/Ownable.sol";
+import "@openzeppelin/contracts-legacy/math/SafeMath.sol";
+
+contract ETBToken is Ownable {
+  using SafeMath for uint256; // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
+  
+  // address public owner;  // @audit-info - Implemented Ownable library from OpenZeppelin
   address public etbDex;
   uint256 public totalSupply;
   string public name = "Eat the Blocks Token";
@@ -15,7 +20,7 @@ contract ETBToken {
   constructor(uint256 initialSupply) public {
     totalSupply = initialSupply;
     balances[msg.sender] = initialSupply;
-    owner = msg.sender;
+    // owner = msg.sender;  // @audit-info - Implemented Ownable library from OpenZeppelin
   }
 
   modifier onlyEtbDex() {
@@ -23,21 +28,22 @@ contract ETBToken {
     _;
   }
 
-  modifier onlyOwner() {
-    require(tx.origin == owner, "Restricted Acces"); // @audit-issue - Usage of tx.origin
-    _;
-  }
+  // @audit-info - Implemented Ownable library from OpenZeppelin
+  // modifier onlyOwner() {
+  //   require(tx.origin == owner, "Restricted Acces");
+  //   _;
+  // }
 
-  function setDexAddress(address _dex) external { // @audit-issue - Lack of Access Control, anyone can update the dex address
+  function setDexAddress(address _dex) external onlyOwner() { // @audit-info - Implemented Ownable library from OpenZeppelin
     etbDex = _dex;
   }
 
   function transfer(address recipient, uint256 amount) external {
     require(recipient != address(0), "ERC20: transfer from the zero address");
-    require(balances[msg.sender] - amount >= 0, "Not enough balance");  // @audit-issue - Underflow issue, using a solidity version lower than 0.8, math under/over flows are not handled by solidity
+    require(balances[msg.sender].sub(amount) >= 0, "Not enough balance");  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
 
-    balances[msg.sender] -= amount;   // @audit-issue - Underflow issue
-    balances[recipient] += amount;  // @audit-issue - Underflow issue
+    balances[msg.sender] = balances[msg.sender].sub(amount);   // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
+    balances[recipient] = balances[recipient].add(amount);  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
   }
 
   function approve(address spender, uint256 amount) external {
@@ -51,25 +57,25 @@ contract ETBToken {
     address recipient,
     uint256 amount
   ) external returns (bool) {
-    require(allowances[sender][msg.sender] - amount >= 0, "ERC20: amount exceeds allowance"); // @audit-issue - Underflow issue
-    require(balances[sender] - amount >= 0, "Not enough balance");  // @audit-issue - Underflow issue
+    require(allowances[sender][msg.sender].sub(amount) >= 0, "ERC20: amount exceeds allowance"); // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
+    require(balances[sender].sub(amount) >= 0, "Not enough balance");  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
 
-    allowances[sender][msg.sender] -= amount; // @audit-issue - Underflow issue
+    allowances[sender][msg.sender] = allowances[sender][msg.sender].sub(amount); // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
 
-    balances[sender] -= amount; // @audit-issue - Underflow issue
-    balances[recipient] += amount;  // @audit-issue - Overflow issue
+    balances[sender] = balances[sender].sub(amount); // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
+    balances[recipient] =  balances[recipient].add(amount);  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
 
     return true;
   }
 
   function mint(uint256 amount) external onlyEtbDex {
-    totalSupply += amount;  // @audit-issue - Overflow issue
-    balances[owner] += amount;  // @audit-issue - Overflow issue
+    totalSupply = totalSupply.add(amount);  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
+    balances[owner()] = balances[owner()].add(amount);  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
   }
 
   function burn(address account, uint256 amount) external onlyEtbDex {
-    totalSupply -= amount;  // @audit-issue - Underflow issue
-    balances[account] -= amount;  // @audit-issue - Underflow issue
+    totalSupply = totalSupply.sub(amount);  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
+    balances[account] = balances[account].sub(amount);  // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
   }
 
   /* --- Getters --- */

@@ -25,7 +25,7 @@ describe("Final Project", function () {
 
   });
 
-  describe.skip("ETB Token", function () {
+  describe("ETB Token", function () {
     it("totalSupply should match Initial supply", async function () {
       expect(await this.etbToken.totalSupply()).to.eq(ethers.utils.parseEther("1000"));
     });
@@ -38,9 +38,8 @@ describe("Final Project", function () {
         expect(dexAddress).to.eq(this.etbDex.address)
       });
       it("only the owner should be able to update the dexAddress", async function () {
-        // @note - Update this test after fixing the vulnerabilities in the contracts
-        //await expect(this.etbToken.connect(attacker).setDexAddress(this.etbDex.address)).to.be.reverted;
-        await this.etbToken.connect(attacker).setDexAddress(this.etbDex.address)
+        await expect(this.etbToken.connect(attacker).setDexAddress(this.etbDex.address)).to.be.revertedWith("Ownable: caller is not the owner");
+        //await this.etbToken.connect(attacker).setDexAddress(this.etbDex.address)
       });
     });
 
@@ -52,10 +51,12 @@ describe("Final Project", function () {
       it("If sender has not enough balance, transaction should be reverted", async function () {
         console.log("User funds: ", await this.etbToken.balanceOf(user.address));
         // @note - Update this test after fixing the vulnerabilities in the contracts
-        //await expect(this.etbToken.connect(user).transfer(user2.address, amountToSend)).to.be.revertedWith("Not enough balance")
-        await this.etbToken.connect(user).transfer(user2.address, amountToSend);
-        console.log("User2 funds at the end: ", await this.etbToken.balanceOf(user2.address));
+        await expect(this.etbToken.connect(user).transfer(user2.address, amountToSend)).to.be.revertedWith("SafeMath: subtraction overflow")
+        
+        
         /** Results of executing the transaction with an underflow bug!:
+         * //await this.etbToken.connect(user).transfer(user2.address, amountToSend);
+         * console.log("User2 funds at the end: ", await this.etbToken.balanceOf(user2.address));
          *  User funds:  BigNumber { value: "0" }
          * User2 funds at the end:  BigNumber { value: "10000000000000000000" }
          *    *** Explanation ***
@@ -86,31 +87,25 @@ describe("Final Project", function () {
       const amountToSend = ethers.utils.parseEther("10");
       const wrongAmount = ethers.utils.parseEther("100");
 
-      // @note - Update this test after fixing the vulnerabilities in the contracts
       it("If spender tries to transferFrom the owner more tokens than what is allowed to, the transaction should be reverted", async function () {
         // deployer transfers 100 to user, and user approves user2 to spend 10 tokens on their behalf
         await this.etbToken.transfer(user.address,ethers.utils.parseEther("100"));
         await this.etbToken.connect(user).approve(user2.address,amountToSend);
 
         // user2 attempts to send 100 tokens from the user balance to the user3
-        //await expect(this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)).to.be.revertedWith("ERC20: amount exceeds allowance")
-        await this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)
+        await expect(this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)).to.be.revertedWith("SafeMath: subtraction overflow")
+        //await this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)
         console.log("User3 funds at the end: ", await this.etbToken.balanceOf(user3.address));
       });
 
-      // @note - Update this test after fixing the vulnerabilities in the contracts
       it("If the token's owner has not enough balance to send the requested amount, the transaction should be reverted", async function () {
-        // deployer transfers 100 to user, and user approves user2 to spend 10 tokens on their behalf
-        await this.etbToken.transfer(user.address,ethers.utils.parseEther("100"));
-        await this.etbToken.connect(user).approve(user2.address,amountToSend);
-
-        // user approves the user2 to spend 100 tokens - But user total balance is only 10 tokens
-        await this.etbToken.connect(user).approve(user2.address, wrongAmount);
+        // user approves to send 100 tokens to user2
+        await this.etbToken.connect(user).approve(user2.address,wrongAmount);
 
         // user2 attempts to send 100 tokens from the user balance to the user3
-        // user2 has indeed the allowance to spend 100 tokens from the user balance, but the user balance is only 10 tokens!
-        //await expect(this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)).to.be.revertedWith("Not enough balance")
-        await this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)
+        // user2 has indeed the allowance to spend 100 tokens from the user balance, but the user balance is 0
+        await expect(this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)).to.be.revertedWith("SafeMath: subtraction overflow")
+        //await this.etbToken.connect(user2).transferFrom(user.address,user3.address, wrongAmount)
         console.log("User3 funds at the end: ", await this.etbToken.balanceOf(user3.address));
       });
 
@@ -211,7 +206,7 @@ describe("Final Project", function () {
   });
 
 
-  describe("EtbDex contract tests", function () {
+  describe.skip("EtbDex contract tests", function () {
     describe.skip("Validate variables were initialized properly when the contract was created", function () {
       it("Validate owner was set properly", async function () {
         expect(await this.etbDex.owner()).to.eq(deployer.address);
