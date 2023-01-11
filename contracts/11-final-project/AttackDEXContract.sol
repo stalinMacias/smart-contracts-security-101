@@ -3,6 +3,8 @@ pragma solidity 0.8.9;
 
 import "hardhat/console.sol";
 
+// Discountinued, victim contract has been patched!
+
 interface iEtbDex {
   function buyTokens() external payable;
   function sellTokens(uint256 _amount) external;
@@ -56,6 +58,7 @@ contract AttackDEXContract {
     //require(tokenContract.balanceOf(address(this)) == msg.value, "Error while buying the tokens using the DEX Contract");
   }
   
+  // Victim contract has been patched and the sellTokens() can't be reentered anymore!
   function sellTokens(uint256 _amount) external onlyOwner() {
     require(tokenContract.balanceOf(address(this)) > 0, "Error, attacker contract has not tokens");
     sellTokensAmount = _amount;

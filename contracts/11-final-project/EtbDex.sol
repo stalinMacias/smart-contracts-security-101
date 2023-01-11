@@ -14,6 +14,7 @@ contract EtbDex is Ownable {
   uint256 public fee;
   // bytes32 private password; // @audit-info - Access control is handled based on the caller account
 
+  mapping(address => uint256) public withdrawals;
   uint256 public ownerFees;
 
   constructor(address _token) public {
@@ -37,17 +38,16 @@ contract EtbDex is Ownable {
   }
 
   // @audit-info - Implemented check-effects-interaction pattern
+  // @audit-info - Implemented deposit-withdraw pattern
+  // @audit-info - By implementing the above two patterns, the sellTokens() function get rids off from the attack vectors it originally had
   function sellTokens(uint256 _amount) external {
     require(_etbToken.balanceOf(msg.sender).sub(_amount) >= 0, "Not enough tokens"); // @audit-info - Implemented SafeMath library from OpenZeppelin on uint256
 
     _etbToken.burn(msg.sender, _amount);
     _etbToken.mint(_amount);
-
-    //payable(msg.sender).send(_amount);  // @audit-info - send() is deprecated, using the call{value:_amount}("") approach to send ETHs
-    (bool success, ) = payable(msg.sender).call.value(_amount)("");
-    require(success, "Error when sending the ETH on the sellTokens function - DEX Contract");
-
+    withdrawals[msg.sender] = withdrawals[msg.sender].add(_amount);
   }
+
 
   function setFee(uint256 _fee) external onlyOwner() {  // @audit-info - Using Ownable library to handle the access control
     fee = _fee;
@@ -56,6 +56,15 @@ contract EtbDex is Ownable {
   function calculateFee(uint256 _amount) internal returns (uint256 _fee) {
     _fee = _amount.div(100).mul(fee);
     ownerFees = ownerFees.add(_fee);
+  }
+
+  // @audit-info - deposit-withdraw pattern and check-effects-interaction applied on withdraw() function
+  function withdraw() external {
+    uint256 _amount =  withdrawals[msg.sender];
+    require(_amount > 0, "Error withdrawing funds, user has no funds to withdraw");
+    withdrawals[msg.sender] = 0;
+    (bool success, ) = payable(msg.sender).call.value(_amount)("");
+    require(success, "Error when sending the ETH on the sellTokens function - DEX Contract");
   }
 
   function withdrawFees() external onlyOwner() {  // @audit-info - Using Ownable library to handle the access control

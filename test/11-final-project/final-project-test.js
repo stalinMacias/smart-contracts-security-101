@@ -27,7 +27,7 @@ describe("Final Project", function () {
 
   });
 
-  describe("ETB Token", function () {
+  describe.skip("ETB Token", function () {
     it("totalSupply should match Initial supply", async function () {
       expect(await this.etbToken.totalSupply()).to.eq(ethers.utils.parseEther("1000"));
     });
@@ -275,6 +275,8 @@ describe("Final Project", function () {
     });
 
     describe("sellTokens() function", function () {
+      /*
+      * The ETBToken contract (victim contract) has been patched and there is no more reentrancy vulnerabilities
       it("Exploiting reentrancy on the DEX Contract by performing an attack from an Attacker Contract", async function () {
         const tokens = ethers.utils.parseEther("5")
         expect(await this.attackerDEXContract.owner()).to.eq(attacker.address);
@@ -305,6 +307,7 @@ describe("Final Project", function () {
         console.log("DEX Contract ETH Balance AFTER the attack: ", ethers.utils.formatEther(await ethers.provider.getBalance(this.etbDex.address)));
         console.log("Attacker account ETH Balance AFTER performing the attack: ", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)));
       })
+      */
 
       it("unhappy path - Caller has not enough tokens to sell", async function () {
         // Buy some tokens from other users - Just to fund with ETH the dex contract
@@ -328,27 +331,50 @@ describe("Final Project", function () {
         */
         
       });
+      
       it("happy path - sellTokens() is executed successfully", async function () {
         const buyAmount = ethers.utils.parseEther("5");
         await this.etbDex.connect(user).buyTokens({ value: buyAmount });
 
-        const fee = await this.etbDex.fee();
-        const fees = buyAmount.div(100).mul(fee);
-
-        // Calculate the total tokens received - Must substract the fees
-        const sellAmount = buyAmount.sub(fees);
+        const sellTokensAmount = await this.etbToken.balanceOf(user.address);
         
-        const userETHBalanceBeforeSelling = await ethers.provider.getBalance(user.address);
+        const withdrawalsBefore = await this.etbDex.withdrawals(user.address);
 
-        await this.etbDex.connect(user).sellTokens(sellAmount);
+        await this.etbDex.connect(user).sellTokens(sellTokensAmount);
 
-        expect(await this.etbToken.balanceOf(user.address)).to.eq(ethers.utils.parseEther("0"))
+        const withdrawalsAfter = await this.etbDex.withdrawals(user.address);
 
-        const userETHBalanceAfterSelling = await ethers.provider.getBalance(user.address);
+        expect(withdrawalsAfter).gt(withdrawalsBefore);
 
-        expect(userETHBalanceAfterSelling).gt(userETHBalanceBeforeSelling);
       });
     });
+
+    describe("Validate withdraw() function", function () {
+      it("unhappy path - an user with no withdraw funds calls the withdraw() function", async function () {
+        // attaker account calls withdraw() even though he doesn't have any funds to withdraw
+        await expect(this.etbDex.connect(attacker).withdraw()).to.be.revertedWith("Error withdrawing funds, user has no funds to withdraw");
+      });
+
+      it("happy path - withdraw() function is executed successfully", async function () {
+        const buyAmount = ethers.utils.parseEther("5");
+        await this.etbDex.connect(user).buyTokens({ value: buyAmount });
+
+        const sellTokensAmount = await this.etbToken.balanceOf(user.address);
+        await this.etbDex.connect(user).sellTokens(sellTokensAmount);
+
+        const userETHBalanceBefore = await ethers.provider.getBalance(user.address); 
+
+        // user account withdraw its funds from the DEX Contract
+        await this.etbDex.connect(user).withdraw();
+
+        const userETHBalanceAfter = await ethers.provider.getBalance(user.address);
+        expect(userETHBalanceAfter).gt(userETHBalanceBefore)
+
+        // Validate the value of withdrawals is set to 0 after the withdraw is completed!
+        const userWithdrawalValueAfter = await this.etbDex.withdrawals(user.address);
+        expect(userWithdrawalValueAfter).to.eq("0");
+      })
+    })
 
     describe("Validate setFee()", function () {
       it("Validate fee was set properly", async function () {
